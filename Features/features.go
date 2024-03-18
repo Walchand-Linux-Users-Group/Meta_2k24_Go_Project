@@ -1,11 +1,25 @@
 package features
 
+// main.go -> Inputs
+// initialization -> by reading the db.txt and writing that to Engineerrs array
+// add, delte, update, show
+// concurrency:
+// when, how, why?
+
+// IO: reading,writing-> DB, file, taking input
+// concurreny/go routines -> go scheduler ++ X CPU
+
+// go garbage collection X
+// go scheduler (must)
+
+//Note these are final dependencies and if they give any erro just comment unused ones for time being.
 import (
 	"bufio"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type Student struct {
@@ -15,10 +29,9 @@ type Student struct {
 }
 
 type Class struct {
-	Students []Student
+	Engineers []Student
 }
 
-// Take input
 func inputName() string {
 	fmt.Println("Enter your first name")
 	var name string
@@ -40,6 +53,8 @@ func inputMarks() int {
 	return marks
 }
 
+// run: at the start of our app
+// appends data to the Engineers slice
 func (c *Class) NewClass() {
 
 	// fmt.Println(entry)
@@ -62,17 +77,15 @@ func (c *Class) NewClass() {
 		}
 
 		studentsArray = append(studentsArray, entry)
-
 	}
 
 	// fmt.Println(studentsArray)
-	c.Students = studentsArray
-
+	c.Engineers = studentsArray
 }
 
-// CRUD: Create Read Update and Delete
-
 func (c *Class) AddStudent() {
+
+	var wg sync.WaitGroup
 
 	name := inputName()
 
@@ -86,67 +99,93 @@ func (c *Class) AddStudent() {
 		Marks:  marks,
 	}
 
-	c.Students = append(c.Students, entry)
+	c.Engineers = append(c.Engineers, entry)
 
 	fmt.Println("Student Added Successfully")
 	fmt.Println()
 
 	//Update this data in the db.txt
+
+	wg.Add(1)
+	go c.writeToFile(&wg)
+	wg.Wait()
 }
 
 func (c *Class) ShowStudents() {
-	for _, student := range c.Students {
+	for _, student := range c.Engineers {
 		name, roll, marks := student.Name, student.RollNo, student.Marks
 		fmt.Printf("Name: %s\nRoll No: %s\nMarks: %d\n", name, roll, marks)
 		fmt.Println()
 	}
 }
 
-func (c *Class) UpdateStudent() {
+func (c Class) UpdateStudent() {
+
+	var wg sync.WaitGroup
+
 	roll := inputRoll()
-	var i int
-	for idx, student := range c.Students {
-		if student.RollNo == roll {
-			i = idx
+	// find the student
+	index := 0
+
+	for ind, stu := range c.Engineers {
+		if stu.RollNo == roll {
+			index = ind
 			break
 		}
 	}
 
+	// get the data
 	newName := inputName()
-
-	newRoll := inputRoll()
-
 	newMarks := inputMarks()
+	// change the data
 
-	c.Students[i] = Student{
+	c.Engineers[index] = Student{
+		RollNo: roll,
 		Name:   newName,
-		RollNo: newRoll,
 		Marks:  newMarks,
 	}
 
-	fmt.Println("Data updated successfully")
-	fmt.Println()
+	wg.Add(1)
+	go c.writeToFile(&wg)
+	wg.Wait()
 
-	//Update it in db.txt
 }
 
 func (c *Class) DeleteStudent() {
+
+	var wg sync.WaitGroup
+
+	// get the data
 	roll := inputRoll()
-	var i int
-	for idx, student := range c.Students {
+	index := 0
+
+	// find the index
+	for idx, student := range c.Engineers {
 		if student.RollNo == roll {
-			i = idx
-			break
+			index = idx
 		}
 	}
 
-	dummyArr := c.Students
+	// remove the student
+	c.Engineers = append(c.Engineers[:index], c.Engineers[index+1:]...)
 
-	dummyArr = append(dummyArr[:i], dummyArr[i+1:]...)
-	c.Students = dummyArr
-	fmt.Println("Data deleted successfully")
-	fmt.Println()
+	wg.Add(1)
+	go c.writeToFile(&wg)
+	wg.Wait()
+}
 
-	//Update the data in db.txt
+func (c *Class) writeToFile(wg *sync.WaitGroup) {
+	defer wg.Done()
+	// convert []Student into string
+	var result []string
 
+	for _, val := range c.Engineers {
+		current := fmt.Sprintf("%v %v %v", val.Name, val.RollNo, val.Marks)
+		result = append(result, current)
+	}
+
+	err := os.WriteFile("db.txt", []byte(strings.Join(result, "\n")), 0664)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
 }
